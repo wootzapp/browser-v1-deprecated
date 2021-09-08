@@ -76,8 +76,8 @@ export default function App() {
   return (
     <View style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
-        <StatusBar style="auto" />
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <StatusBar translucent={false} style="light" />
+        <View style={{ flexDirection: "row", alignItems: "center",marginTop:10 }}>
           <TouchableOpacity activeOpacity={0.7} onPress={goBack}>
             <Ionicons
               name="chevron-back"
