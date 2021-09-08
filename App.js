@@ -1,13 +1,23 @@
 import { StatusBar } from "expo-status-bar";
 import React, { useState, useRef } from "react";
-import { SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { WebView } from "react-native-webview";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function App() {
   const [url, seturl] = useState("https://www.google.com");
   const [input, setInput] = useState("");
   const [canGoForward, setCanGoForward] = useState(false);
   const [canGoBack, setCanGoBack] = useState(false);
+  const [loader, setLoader] = useState(false);
   const [title, setTitle] = useState("");
   const browserRef = useRef(null);
   const inputRef = useRef(null);
@@ -43,25 +53,27 @@ export default function App() {
   }
 
   const onNavigationStateChange = (navState) => {
-    const { canGoForward, canGoBack, title } = navState;
+    const { canGoForward, canGoBack, title, url } = navState;
+    console.warn("title", url);
+    seturl(url);
     setTitle(title);
     setCanGoBack(canGoBack);
     setCanGoForward(canGoForward);
   };
 
   // // go to the next page
-  // const goForward = () => {
-  //   if (browserRef && this.state.canGoForward) {
-  //     browserRef.goForward();
-  //   }
-  // };
+  const goForward = () => {
+    if (browserRef && canGoForward) {
+      browserRef.current.goForward();
+    }
+  };
 
   // // go back to the last page
-  // const goBack = () => {
-  //   if (browserRef && this.state.canGoBack) {
-  //     browserRef.goBack();
-  //   }
-  // };
+  const goBack = () => {
+    if (browserRef && canGoBack) {
+      browserRef.current.goBack();
+    }
+  };
 
   // // reload the page
   // const reload = () => {
@@ -69,26 +81,53 @@ export default function App() {
   //     browserRef.reload();
   //   }
   // };
-  console.warn("Url ", url);
+  // console.warn("Url ", url);
   return (
     <View style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
         <StatusBar style="auto" />
-        <TextInput
-          ref={inputRef}
-          autoCapitalize="none"
-          defaultValue={url}
-          onSubmitEditing={() => upgradeURL(url)}
-          returnKeyType="search"
-          onChangeText={(val) => seturl(val)}
-          clearButtonMode="while-editing"
-          autoCorrect={false}
-          style={[styles.addressBarTextInput]}
-        />
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <TouchableOpacity activeOpacity={0.7} onPress={goBack}>
+            <Ionicons
+              name="chevron-back"
+              size={28}
+              color={canGoBack ? "#000" : "#808080"}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            disabled={!canGoForward}
+            activeOpacity={0.7}
+            onPress={goForward}
+          >
+            <Ionicons
+              name="chevron-forward"
+              size={28}
+              color={canGoForward ? "#000" : "#808080"}
+            />
+          </TouchableOpacity>
+          <TextInput
+            ref={inputRef}
+            autoCapitalize="none"
+            defaultValue={url}
+            onSubmitEditing={() => upgradeURL(url)}
+            returnKeyType="search"
+            onChangeText={(val) => seturl(val)}
+            clearButtonMode="while-editing"
+            autoCorrect={false}
+            style={[styles.addressBarTextInput]}
+          />
+          {loader ? (
+            <View style={{ paddingHorizontal: 20 }} activeOpacity={0.7}>
+              <ActivityIndicator size="small" color="#000" />
+            </View>
+          ) : null}
+        </View>
         <WebView
           ref={browserRef}
           source={{ uri: url }}
           onNavigationStateChange={onNavigationStateChange}
+          onLoadStart={() => setLoader(true)}
+          onLoadEnd={() => setLoader(false)}
         />
       </SafeAreaView>
     </View>
@@ -108,5 +147,7 @@ const styles = StyleSheet.create({
     height: 24,
     paddingLeft: 10,
     fontSize: 14,
+    flex: 1,
+    marginHorizontal: 10,
   },
 });
