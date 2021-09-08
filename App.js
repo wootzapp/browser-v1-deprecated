@@ -36,7 +36,6 @@ export default function App() {
   // facebook => https://www.google.com/search?q=facebook
   function upgradeURL(uri, searchEngine = "google") {
     const isURL = uri.split(" ").length === 1 && uri.includes(".");
-    console.warn(uri);
     if (isURL) {
       if (!uri.startsWith("http")) {
         seturl("https://www." + uri);
@@ -54,7 +53,6 @@ export default function App() {
 
   const onNavigationStateChange = (navState) => {
     const { canGoForward, canGoBack, title, url } = navState;
-    console.warn("title", url);
     seturl(url);
     setTitle(title);
     setCanGoBack(canGoBack);
@@ -75,13 +73,6 @@ export default function App() {
     }
   };
 
-  // // reload the page
-  // const reload = () => {
-  //   if (browserRef) {
-  //     browserRef.reload();
-  //   }
-  // };
-  // console.warn("Url ", url);
   return (
     <View style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
