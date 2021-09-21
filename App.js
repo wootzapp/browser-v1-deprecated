@@ -1,4 +1,4 @@
-import React, {useState, useRef} from 'react';
+import React, {useState, useRef, useMemo, useCallback} from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -13,6 +13,8 @@ import {WebView} from 'react-native-webview';
 import RNFS from 'react-native-fs';
 import _ from 'lodash';
 import Web3 from 'web3';
+import BottomSheet, {BottomSheetView} from '@gorhom/bottom-sheet';
+import CustomBackground from './CustomBackground';
 
 export const NETWORK = {
   MAINNET: {
@@ -38,16 +40,24 @@ export default function App() {
   const [canGoBack, setCanGoBack] = useState(false);
   const [loader, setLoader] = useState(false);
   const [title, setTitle] = useState('');
-  const browserRef = useRef(null);
+  const webview = useRef(null);
   const inputRef = useRef(null);
   const [web3JsContent, setWeb3JsContent] = React.useState('');
   const [ethersJsContent, setEthersJsContent] = React.useState('');
   const [rskEndpoint, setRskEndpoint] = React.useState('');
   const [networkVersion, setNetworkVersion] = React.useState('');
   const [web3, setWeb3] = React.useState('');
-  const [modalView, setModalView] = React.useState(null);
+  const [popupView, setPopupView] = React.useState(false);
 
-  console.log(Web3);
+  // hooks
+  const sheetRef = useRef(null);
+
+  const snapPoints = useMemo(() => ['50%'], []);
+
+  const handleSnapPress = useCallback(index => {
+    sheetRef.current?.snapToIndex(index);
+  }, []);
+
   const {MAINNET, TESTNET} = NETWORK;
 
   React.useEffect(() => {
@@ -296,7 +306,8 @@ export default function App() {
           break;
         }
         case 'wallet_addEthereumChain': {
-          return;
+          handleWalletAddEthereumChain();
+          break;
         }
 
         case 'eth_gasPrice': {
@@ -346,8 +357,27 @@ export default function App() {
     }
   };
 
-  const popupMessageModal = async payload => {
-    // TODO popup
+  const popupMessageModal = () => {
+    return (
+      <BottomSheet
+        enabl
+        backgroundComponent={CustomBackground}
+        ref={sheetRef}
+        snapPoints={snapPoints}
+        enablePanDownToClose={true}>
+        <BottomSheetView
+          style={{
+            flex: 1,
+          }}>
+          <Text style={{alignSelf: 'center'}}>Hello Metamask</Text>
+        </BottomSheetView>
+      </BottomSheet>
+    );
+  };
+
+  const handleWalletAddEthereumChain = () => {
+    setPopupView(true);
+    handleSnapPress(0);
   };
 
   const handleEthEstimateGas = async payload => {
@@ -393,8 +423,8 @@ export default function App() {
   };
 
   const postMessageToWebView = result => {
-    if (this.webview && this.webview.current) {
-      this.webview.current.postMessage(JSON.stringify(result));
+    if (webview && webview.current) {
+      webview.current.postMessage(JSON.stringify(result));
     }
   };
 
@@ -457,15 +487,15 @@ export default function App() {
 
   // // go to the next page
   const goForward = () => {
-    if (browserRef && canGoForward) {
-      browserRef.current.goForward();
+    if (webview && canGoForward) {
+      webview.current.goForward();
     }
   };
 
   // // go back to the last page
   const goBack = () => {
-    if (browserRef && canGoBack) {
-      browserRef.current.goBack();
+    if (webview && canGoBack) {
+      webview.current.goBack();
     }
   };
 
@@ -503,7 +533,7 @@ export default function App() {
           ) : null}
         </View>
         <WebView
-          ref={browserRef}
+          ref={webview}
           source={{uri: url}}
           onNavigationStateChange={onNavigationStateChange}
           onLoadStart={() => setLoader(true)}
@@ -512,6 +542,7 @@ export default function App() {
           javaScriptEnabled
           onMessage={onMessage}
         />
+        {popupView && popupMessageModal()}
       </SafeAreaView>
     </View>
   );
