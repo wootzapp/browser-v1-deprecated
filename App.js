@@ -12,7 +12,25 @@ import {
 import {WebView} from 'react-native-webview';
 import RNFS from 'react-native-fs';
 import _ from 'lodash';
+import Web3 from 'web3';
 
+export const NETWORK = {
+  MAINNET: {
+    RSK_END_POINT:
+      'https://mainnet.infura.io/v3/4e1043588d184620b5524b6d8aeb85cc',
+    NETWORK_VERSION: 30,
+  },
+  TESTNET: {
+    RSK_END_POINT:
+      'https://mainnet.infura.io/v3/4e1043588d184620b5524b6d8aeb85cc',
+    NETWORK_VERSION: 31,
+  },
+};
+export const TRANSACTION = {
+  DEFAULT_GAS_LIMIT: '0x927c0',
+  DEFAULT_GAS_PRICE: '0x47868C00',
+  DEFAULT_VALUE: '0x0',
+};
 export default function App() {
   const [url, seturl] = useState('https://www.google.com');
   const [input, setInput] = useState('');
@@ -24,20 +42,25 @@ export default function App() {
   const inputRef = useRef(null);
   const [web3JsContent, setWeb3JsContent] = React.useState('');
   const [ethersJsContent, setEthersJsContent] = React.useState('');
+  const [rskEndpoint, setRskEndpoint] = React.useState('');
+  const [networkVersion, setNetworkVersion] = React.useState('');
+  const [web3, setWeb3] = React.useState('');
+  const [modalView, setModalView] = React.useState(null);
+
+  console.log(Web3);
+  const {MAINNET, TESTNET} = NETWORK;
 
   React.useEffect(() => {
+    setNetwork();
     if (web3JsContent === '') {
       if (Platform.OS === 'ios') {
         RNFS.readFile(`${RNFS.MainBundlePath}/web3.1.2.7.js`, 'utf8').then(
           content => {
-            console.log(content, 'log the content');
             setWeb3JsContent(content);
           },
         );
       } else {
         RNFS.readFileAssets('web3.1.2.7.js', 'utf8').then(content => {
-          console.log(content, 'log the content');
-
           setWeb3JsContent(content);
         });
       }
@@ -46,25 +69,32 @@ export default function App() {
       if (Platform.OS === 'ios') {
         RNFS.readFile(`${RNFS.MainBundlePath}/ethers5.0.js`, 'utf8').then(
           content => {
-            console.log(content, 'log the content');
-
             setEthersJsContent(content);
           },
         );
       } else {
         RNFS.readFileAssets('ethers5.0.js', 'utf8').then(content => {
-          console.log(content, 'log the content');
-
           setEthersJsContent(content);
         });
       }
     }
   }, []);
 
+  const setNetwork = network => {
+    const rskEndpoint =
+      network === 'Mainnet' ? MAINNET.RSK_END_POINT : TESTNET.RSK_END_POINT;
+    const networkVersion =
+      network === 'Mainnet' ? MAINNET.NETWORK_VERSION : TESTNET.NETWORK_VERSION;
+
+    const web3 = new Web3(rskEndpoint);
+
+    setRskEndpoint(rskEndpoint);
+    setNetworkVersion(networkVersion);
+    setWeb3(web3);
+  };
+
   const getJsCode = address => {
-    const dappName = 'Money on Chain,';
-    const rskEndpoint = 'Money on Chain,';
-    const networkVersion = 8080;
+    const dappName = 'Money on Chain';
 
     return `
       ${web3JsContent}
@@ -258,12 +288,17 @@ export default function App() {
     const payload = JSON.parse(data);
     const {method, id} = payload;
 
+    console.log(payload.method, 'this is the payload');
     try {
       switch (method) {
         case 'eth_estimateGas': {
           await handleEthEstimateGas(payload);
           break;
         }
+        case 'wallet_addEthereumChain': {
+          return;
+        }
+
         case 'eth_gasPrice': {
           await handleEthGasPrice(payload);
           break;
@@ -280,6 +315,16 @@ export default function App() {
 
         case 'eth_blockNumber': {
           await handleEthGetBlockNumber(payload);
+          break;
+        }
+
+        case 'personal_sign': {
+          await popupMessageModal(payload);
+          break;
+        }
+
+        case 'eth_sendTransaction': {
+          await popupMessageModal(payload);
           break;
         }
 
@@ -301,9 +346,13 @@ export default function App() {
     }
   };
 
+  const popupMessageModal = async payload => {
+    // TODO popup
+  };
+
   const handleEthEstimateGas = async payload => {
     const {params, id} = payload;
-    const res = await this.web3.estimateGas(params[0]);
+    const res = await web3.estimateGas(params[0]);
     const estimateGas = Number(res);
     const result = {id, result: estimateGas};
     postMessageToWebView(result);
@@ -311,14 +360,14 @@ export default function App() {
 
   const handleEthGasPrice = async payload => {
     const {id} = payload;
-    const res = await this.web3.getGasPrice();
+    const res = await web3.getGasPrice();
     const result = {id, result: res};
     postMessageToWebView(result);
   };
 
   const handleEthCall = async payload => {
     const {id, params} = payload;
-    const res = await this.web3.call(params[0], params[1]);
+    const res = await web3.call(params[0], params[1]);
     const result = {id, result: res};
     postMessageToWebView(result);
   };
@@ -331,14 +380,14 @@ export default function App() {
       _.isEmpty(params) || (params[0] && params[0] === '0x0')
         ? 'latest'
         : params[0];
-    res = await this.web3.getBlock(blockNumber);
+    res = await web3.getBlock(blockNumber);
     const result = {id, result: res};
     postMessageToWebView(result);
   };
 
   const handleEthGetBlockNumber = async payload => {
     const {id} = payload;
-    const res = await this.web3.getBlockNumber();
+    const res = await web3.getBlockNumber();
     const result = {id, result: res};
     postMessageToWebView(result);
   };
@@ -349,73 +398,9 @@ export default function App() {
     }
   };
 
-  const handlePersonalSign = async (id, message) => {
-    const {callAuthVerify} = this.props;
-    const {
-      wallet: {coins},
-    } = this.state;
-    callAuthVerify(
-      async () => {
-        try {
-          const {privateKey} = coins[0];
-          const accountInfo = await this.web3.accounts.privateKeyToAccount(
-            privateKey,
-          );
-          const signature = await accountInfo.sign(message, privateKey);
-          const result = {id, result: signature.signature};
-          this.postMessageToWebView(result);
-        } catch (err) {
-          console.log('personal_sign err: ', err);
-          this.handleReject(id, err.message);
-        }
-      },
-      () => {
-        this.handleReject(id, 'Verify error');
-      },
-    );
-  };
-
-  const handleEthSendTransaction = async (id, txData) => {
-    const {callAuthVerify} = this.props;
-    const {
-      wallet: {coins},
-    } = this.state;
-    callAuthVerify(
-      async () => {
-        try {
-          const {privateKey} = coins[0];
-          const accountInfo = await this.web3.accounts.privateKeyToAccount(
-            privateKey,
-          );
-          const signedTransaction = await accountInfo.signTransaction(
-            txData,
-            privateKey,
-          );
-          const {rawTransaction} = signedTransaction;
-          this.web3
-            .sendSignedTransaction(rawTransaction)
-            .on('transactionHash', hash => {
-              const result = {id, result: hash};
-              this.postMessageToWebView(result);
-            })
-            .on('error', error => {
-              console.log('sendSignedTransaction error: ', error);
-              this.handleReject(id, error.message);
-            });
-        } catch (err) {
-          console.log('eth_sendTransaction err: ', err);
-          this.handleReject(id, err.message);
-        }
-      },
-      () => {
-        this.handleReject(id, 'Verify error');
-      },
-    );
-  };
-
   const handleEthGetTransactionReceipt = async payload => {
     const {id, params} = payload;
-    let res = await this.web3.getTransactionReceipt(params[0]);
+    let res = await web3.getTransactionReceipt(params[0]);
     if (!res) {
       res = '';
     } else {
@@ -423,7 +408,7 @@ export default function App() {
       res.status = res.status ? 1 : 0;
     }
     const result = {id, result: res};
-    this.postMessageToWebView(result);
+    postMessageToWebView(result);
   };
 
   const handleEthGetTransactionByHash = async payload => {
@@ -524,6 +509,7 @@ export default function App() {
           onLoadStart={() => setLoader(true)}
           onLoadEnd={() => setLoader(false)}
           injectedJavaScriptBeforeContentLoaded={injectJavaScript(url)}
+          javaScriptEnabled
           onMessage={onMessage}
         />
       </SafeAreaView>
