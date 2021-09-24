@@ -20,14 +20,19 @@ export const NETWORK = {
   MAINNET: {
     RSK_END_POINT:
       'https://mainnet.infura.io/v3/4e1043588d184620b5524b6d8aeb85cc',
-    NETWORK_VERSION: 30,
+    NETWORK_VERSION: 56,
   },
   TESTNET: {
     RSK_END_POINT:
       'https://mainnet.infura.io/v3/4e1043588d184620b5524b6d8aeb85cc',
-    NETWORK_VERSION: 31,
+    NETWORK_VERSION: 56,
   },
 };
+
+export const MOCKUP_WALLET = {
+  address: '0x2f67aee4bb75d53e606736d177dbcd4df0311861',
+};
+
 export const TRANSACTION = {
   DEFAULT_GAS_LIMIT: '0x927c0',
   DEFAULT_GAS_PRICE: '0x47868C00',
@@ -538,7 +543,9 @@ export default function App() {
           onNavigationStateChange={onNavigationStateChange}
           onLoadStart={() => setLoader(true)}
           onLoadEnd={() => setLoader(false)}
-          injectedJavaScriptBeforeContentLoaded={injectJavaScript(url)}
+          injectedJavaScriptBeforeContentLoaded={injectJavaScript(
+            MOCKUP_WALLET.address,
+          )}
           javaScriptEnabled
           onMessage={onMessage}
         />
