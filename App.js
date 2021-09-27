@@ -1,4 +1,4 @@
-import React, {useState, useRef, useMemo, useCallback} from 'react';
+import React, {useState, useRef, createRef} from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -13,8 +13,9 @@ import {WebView} from 'react-native-webview';
 import RNFS from 'react-native-fs';
 import _ from 'lodash';
 import Web3 from 'web3';
-import BottomSheet, {BottomSheetView} from '@gorhom/bottom-sheet';
-import CustomBackground from './CustomBackground';
+import {Actionsheet} from 'native-base';
+import {NativeBaseProvider} from 'native-base/src/core/NativeBaseProvider';
+import {Wallet} from 'ethers';
 
 export const NETWORK = {
   MAINNET: {
@@ -29,15 +30,6 @@ export const NETWORK = {
   },
 };
 
-export const MOCKUP_WALLET = {
-  address: '0x2f67aee4bb75d53e606736d177dbcd4df0311861',
-};
-
-export const TRANSACTION = {
-  DEFAULT_GAS_LIMIT: '0x927c0',
-  DEFAULT_GAS_PRICE: '0x47868C00',
-  DEFAULT_VALUE: '0x0',
-};
 export default function App() {
   const [url, seturl] = useState('https://www.google.com');
   const [input, setInput] = useState('');
@@ -45,7 +37,7 @@ export default function App() {
   const [canGoBack, setCanGoBack] = useState(false);
   const [loader, setLoader] = useState(false);
   const [title, setTitle] = useState('');
-  const webview = useRef(null);
+  const webview = createRef();
   const inputRef = useRef(null);
   const [web3JsContent, setWeb3JsContent] = React.useState('');
   const [ethersJsContent, setEthersJsContent] = React.useState('');
@@ -53,20 +45,23 @@ export default function App() {
   const [networkVersion, setNetworkVersion] = React.useState('');
   const [web3, setWeb3] = React.useState('');
   const [popupView, setPopupView] = React.useState(false);
-
-  // hooks
-  const sheetRef = useRef(null);
-
-  const snapPoints = useMemo(() => ['50%'], []);
-
-  const handleSnapPress = useCallback(index => {
-    sheetRef.current?.snapToIndex(index);
-  }, []);
+  const [address, setAddress] = React.useState('');
 
   const {MAINNET, TESTNET} = NETWORK;
 
   React.useEffect(() => {
-    setNetwork();
+    loadJsFiles();
+    setNetworks();
+    generateWallet();
+  }, []);
+
+  const generateWallet = () => {
+    const wallet = Wallet.createRandom();
+    console.log(wallet.address);
+    setAddress(wallet.address);
+  };
+
+  const loadJsFiles = () => {
     if (web3JsContent === '') {
       if (Platform.OS === 'ios') {
         RNFS.readFile(`${RNFS.MainBundlePath}/web3.1.2.7.js`, 'utf8').then(
@@ -93,9 +88,10 @@ export default function App() {
         });
       }
     }
-  }, []);
+    console.log('finished load js');
+  };
 
-  const setNetwork = network => {
+  const setNetworks = network => {
     const rskEndpoint =
       network === 'Mainnet' ? MAINNET.RSK_END_POINT : TESTNET.RSK_END_POINT;
     const networkVersion =
@@ -303,6 +299,7 @@ export default function App() {
     const payload = JSON.parse(data);
     const {method, id} = payload;
 
+    console.log('onMessage...');
     console.log(payload.method, 'this is the payload');
     try {
       switch (method) {
@@ -321,7 +318,8 @@ export default function App() {
         }
         case 'eth_call': {
           await handleEthCall(payload);
-          break;
+          console.log('eth called...');
+          return;
         }
 
         case 'eth_getBlockByNumber': {
@@ -364,25 +362,18 @@ export default function App() {
 
   const popupMessageModal = () => {
     return (
-      <BottomSheet
-        enabl
-        backgroundComponent={CustomBackground}
-        ref={sheetRef}
-        snapPoints={snapPoints}
-        enablePanDownToClose={true}>
-        <BottomSheetView
-          style={{
-            flex: 1,
-          }}>
-          <Text style={{alignSelf: 'center'}}>Hello Metamask</Text>
-        </BottomSheetView>
-      </BottomSheet>
+      <NativeBaseProvider>
+        <Actionsheet isOpen={popupView} onClose={setPopupView(false)}>
+          <Actionsheet.Content>
+            <Actionsheet.Item>Hello Metamask</Actionsheet.Item>
+          </Actionsheet.Content>
+        </Actionsheet>
+      </NativeBaseProvider>
     );
   };
 
   const handleWalletAddEthereumChain = () => {
     setPopupView(true);
-    handleSnapPress(0);
   };
 
   const handleEthEstimateGas = async payload => {
@@ -537,18 +528,21 @@ export default function App() {
             </View>
           ) : null}
         </View>
-        <WebView
-          ref={webview}
-          source={{uri: url}}
-          onNavigationStateChange={onNavigationStateChange}
-          onLoadStart={() => setLoader(true)}
-          onLoadEnd={() => setLoader(false)}
-          injectedJavaScriptBeforeContentLoaded={injectJavaScript(
-            MOCKUP_WALLET.address,
-          )}
-          javaScriptEnabled
-          onMessage={onMessage}
-        />
+        {address && web3JsContent && ethersJsContent ? (
+          <WebView
+            ref={webview}
+            source={{uri: url}}
+            onNavigationStateChange={onNavigationStateChange}
+            onLoadStart={() => setLoader(true)}
+            onLoadEnd={() => setLoader(false)}
+            injectedJavaScriptBeforeContentLoaded={injectJavaScript(address)}
+            javaScriptEnabled
+            onMessage={onMessage}
+          />
+        ) : (
+          <ActivityIndicator size="large" color="#000" />
+        )}
+
         {popupView && popupMessageModal()}
       </SafeAreaView>
     </View>
