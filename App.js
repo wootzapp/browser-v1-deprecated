@@ -1,4 +1,4 @@
-import React, {useState, useRef, createRef} from 'react';
+import React, {useState, useRef, createRef, useCallback, useMemo} from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -13,9 +13,9 @@ import {WebView} from 'react-native-webview';
 import RNFS from 'react-native-fs';
 import _ from 'lodash';
 import Web3 from 'web3';
-import {Actionsheet} from 'native-base';
-import {NativeBaseProvider} from 'native-base/src/core/NativeBaseProvider';
 import {Wallet} from 'ethers';
+import BottomSheet, {BottomSheetView} from '@gorhom/bottom-sheet';
+import CustomBackground from './CustomBackground';
 
 export const NETWORK = {
   MAINNET: {
@@ -31,7 +31,7 @@ export const NETWORK = {
 };
 
 export default function App() {
-  const [url, seturl] = useState('https://www.google.com');
+  const [url, seturl] = useState('https://pancakeswap.finance/');
   const [input, setInput] = useState('');
   const [canGoForward, setCanGoForward] = useState(false);
   const [canGoBack, setCanGoBack] = useState(false);
@@ -53,6 +53,15 @@ export default function App() {
     loadJsFiles();
     setNetworks();
     generateWallet();
+  }, []);
+
+  // hooks
+  const sheetRef = useRef(null);
+
+  const snapPoints = useMemo(() => ['50%'], []);
+
+  const handleSnapPress = useCallback(index => {
+    sheetRef.current?.snapToIndex(index);
   }, []);
 
   const generateWallet = () => {
@@ -137,29 +146,6 @@ export default function App() {
               rejecter[id] = reject;
             })
           }
-          function initNotification() {
-            setInterval(() => {
-              if (!window.Notification) {
-                // Disable the web site notification
-                const Notification = class {
-                  constructor(title, options) {
-                    this.title = title;
-                    this.options = options;
-                  }
-      
-                  // Override close function
-                  close() {
-                  }
-      
-                  // Override bind function
-                  bind(notification) {
-                  }
-                }
-      
-                window.Notification = Notification;
-              }
-            }, 1000)
-          }
           function initWeb3() {
             // Inject the web3 instance to web site
             const rskEndpoint = '${rskEndpoint}';
@@ -176,7 +162,7 @@ export default function App() {
             // Adapt web3 old version (new web3 version move toDecimal and toBigNumber to utils class).
             window.web3.toDecimal = window.web3.utils.toDecimal;
             window.web3.toBigNumber = window.web3.utils.toBN;
-            
+
             const config = {
               isEnabled: true,
               isUnlocked: true,
@@ -207,62 +193,15 @@ export default function App() {
               api: '1.2.7',
               getNetwork: (cb) => { cb(null, '${networkVersion}') },
             }
-            window.ethereum.on = (method, callback) => { if (method) {console.log(method)} }
-            // Adapt web3 old version (need to override the abi's method).
-            // web3 < 1.0 using const contract = web3.eth.contract(abi).at(address)
-            // web3 >= 1.0 using const contract = new web3.eth.Contract()
-            window.web3.eth.contract = (abi) => {
-              const contract = new web3.eth.Contract(abi);
-              contract.at = (address) => {
-                contract.options.address = address;
-                return contract;
-              }
-              const { _jsonInterface } = contract;
-              _jsonInterface.forEach((item) => {
-                if (item.name && item.stateMutability) {
-                  const method = item.name;
-                  if (item.stateMutability === 'pure' || item.stateMutability === 'view') {
-                    contract[method] = (params, cb) => {
-                      console.log('contract method: ', method);
-                      contract.methods[method](params).call({ from: '${address}' }, cb);
-                    };
-                  } else {
-                    contract[method] = (params, cb) => {
-                      console.log('contract method: ', method);
-                      contract.methods[method](params).send({ from: '${address}' }, cb);
-                    };
-                  }
-                }
-              });
-              return contract;
-            }
+            window.ethereum.on = (method, callback) => { if (method) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({type: "click", message : "ok"}));
+            } }
             // Override the sendAsync function so we can listen the web site's call and do our things
             const sendAsync = async (payload, callback) => {
               let err, res = '', result = '';
               const {method, params, jsonrpc, id} = payload;
               console.log('payload: ', payload);
-              try {
-                if (method === 'net_version') {
-                  result = '${networkVersion}';
-                } else if (method === 'eth_chainId') {
-                  result = web3.utils.toHex(${networkVersion});
-                } else if (method === 'eth_requestAccounts' || method === 'eth_accounts' || payload === 'eth_accounts') {
-                  result = ['${address}'];
-                } else {
-                  result = await communicateWithRN(payload);
-                }
-                res = {id, jsonrpc, method, result};
-              } catch(err) {
-                err = err;
-                console.log('sendAsync err: ', err);
-              }
-              
-              console.log('res: ', res);
-              if (callback) {
-                callback(err, res);
-              } else {
-                return res || err;
-              }
+              await communicateWithRN(payload)
             }
             // ensure window.ethereum.send and window.ethereum.sendAsync are not undefined
             setTimeout(() => {
@@ -282,7 +221,6 @@ export default function App() {
               }
             }, 1000)
           }
-          initNotification();
           initWeb3();
         }) ();
       true
@@ -295,86 +233,31 @@ export default function App() {
   };
 
   const onMessage = async event => {
-    const {data} = event.nativeEvent;
-    const payload = JSON.parse(data);
-    const {method, id} = payload;
-
-    console.log('onMessage...');
-    console.log(payload.method, 'this is the payload');
-    try {
-      switch (method) {
-        case 'eth_estimateGas': {
-          await handleEthEstimateGas(payload);
-          break;
-        }
-        case 'wallet_addEthereumChain': {
-          handleWalletAddEthereumChain();
-          break;
-        }
-
-        case 'eth_gasPrice': {
-          await handleEthGasPrice(payload);
-          break;
-        }
-        case 'eth_call': {
-          await handleEthCall(payload);
-          console.log('eth called...');
-          return;
-        }
-
-        case 'eth_getBlockByNumber': {
-          await handleEthGetBlockByNumber(payload);
-          break;
-        }
-
-        case 'eth_blockNumber': {
-          await handleEthGetBlockNumber(payload);
-          break;
-        }
-
-        case 'personal_sign': {
-          await popupMessageModal(payload);
-          break;
-        }
-
-        case 'eth_sendTransaction': {
-          await popupMessageModal(payload);
-          break;
-        }
-
-        case 'eth_getTransactionReceipt': {
-          await handleEthGetTransactionReceipt(payload);
-          break;
-        }
-
-        case 'eth_getTransactionByHash': {
-          await handleEthGetTransactionByHash(payload);
-          break;
-        }
-
-        default:
-          break;
-      }
-    } catch (err) {
-      console.log('onMessage error: ', err);
-    }
+    console.log('_onMessage', JSON.parse(event.nativeEvent.data));
+    const res = JSON.parse(event.nativeEvent.data);
+    handleSnapPress(0);
+    setPopupView(true);
   };
 
   const popupMessageModal = () => {
     return (
-      <NativeBaseProvider>
-        <Actionsheet isOpen={popupView} onClose={setPopupView(false)}>
-          <Actionsheet.Content>
-            <Actionsheet.Item>Hello Metamask</Actionsheet.Item>
-          </Actionsheet.Content>
-        </Actionsheet>
-      </NativeBaseProvider>
+      <BottomSheet
+        enabled={true}
+        backgroundComponent={CustomBackground}
+        ref={sheetRef}
+        snapPoints={snapPoints}
+        enablePanDownToClose={true}>
+        <BottomSheetView
+          style={{
+            flex: 1,
+          }}>
+          <Text style={{alignSelf: 'center'}}>Hello Metamask</Text>
+        </BottomSheetView>
+      </BottomSheet>
     );
   };
 
-  const handleWalletAddEthereumChain = () => {
-    setPopupView(true);
-  };
+  const handleWalletAddEthereumChain = () => {};
 
   const handleEthEstimateGas = async payload => {
     const {params, id} = payload;
@@ -528,20 +411,17 @@ export default function App() {
             </View>
           ) : null}
         </View>
-        {address && web3JsContent && ethersJsContent ? (
-          <WebView
-            ref={webview}
-            source={{uri: url}}
-            onNavigationStateChange={onNavigationStateChange}
-            onLoadStart={() => setLoader(true)}
-            onLoadEnd={() => setLoader(false)}
-            injectedJavaScriptBeforeContentLoaded={injectJavaScript(address)}
-            javaScriptEnabled
-            onMessage={onMessage}
-          />
-        ) : (
-          <ActivityIndicator size="large" color="#000" />
-        )}
+
+        <WebView
+          ref={webview}
+          source={{uri: url}}
+          onNavigationStateChange={onNavigationStateChange}
+          onLoadStart={() => setLoader(true)}
+          onLoadEnd={() => setLoader(false)}
+          injectedJavaScriptBeforeContentLoaded={injectJavaScript(address)}
+          javaScriptEnabled
+          onMessage={onMessage}
+        />
 
         {popupView && popupMessageModal()}
       </SafeAreaView>
