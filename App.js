@@ -1,7 +1,6 @@
 import React, {useState, useRef, createRef, useCallback, useMemo} from 'react';
 import {
   ActivityIndicator,
-  Platform,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -10,48 +9,24 @@ import {
   View,
 } from 'react-native';
 import {WebView} from 'react-native-webview';
-import RNFS from 'react-native-fs';
 import _ from 'lodash';
-import Web3 from 'web3';
 import {Wallet} from 'ethers';
 import BottomSheet, {BottomSheetView} from '@gorhom/bottom-sheet';
 import CustomBackground from './CustomBackground';
-
-export const NETWORK = {
-  MAINNET: {
-    RSK_END_POINT:
-      'https://mainnet.infura.io/v3/4e1043588d184620b5524b6d8aeb85cc',
-    NETWORK_VERSION: 56,
-  },
-  TESTNET: {
-    RSK_END_POINT:
-      'https://mainnet.infura.io/v3/4e1043588d184620b5524b6d8aeb85cc',
-    NETWORK_VERSION: 56,
-  },
-};
+import web3 from 'web3';
 
 export default function App() {
   const [url, seturl] = useState('https://pancakeswap.finance/');
-  const [input, setInput] = useState('');
   const [canGoForward, setCanGoForward] = useState(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [loader, setLoader] = useState(false);
   const [title, setTitle] = useState('');
   const webview = createRef();
   const inputRef = useRef(null);
-  const [web3JsContent, setWeb3JsContent] = React.useState('');
-  const [ethersJsContent, setEthersJsContent] = React.useState('');
-  const [rskEndpoint, setRskEndpoint] = React.useState('');
-  const [networkVersion, setNetworkVersion] = React.useState('');
-  const [web3, setWeb3] = React.useState('');
   const [popupView, setPopupView] = React.useState(false);
   const [address, setAddress] = React.useState('');
 
-  const {MAINNET, TESTNET} = NETWORK;
-
   React.useEffect(() => {
-    loadJsFiles();
-    setNetworks();
     generateWallet();
   }, []);
 
@@ -70,161 +45,263 @@ export default function App() {
     setAddress(wallet.address);
   };
 
-  const loadJsFiles = () => {
-    if (web3JsContent === '') {
-      if (Platform.OS === 'ios') {
-        RNFS.readFile(`${RNFS.MainBundlePath}/web3.1.2.7.js`, 'utf8').then(
-          content => {
-            setWeb3JsContent(content);
-          },
-        );
-      } else {
-        RNFS.readFileAssets('web3.1.2.7.js', 'utf8').then(content => {
-          setWeb3JsContent(content);
-        });
-      }
-    }
-    if (ethersJsContent === '') {
-      if (Platform.OS === 'ios') {
-        RNFS.readFile(`${RNFS.MainBundlePath}/ethers5.0.js`, 'utf8').then(
-          content => {
-            setEthersJsContent(content);
-          },
-        );
-      } else {
-        RNFS.readFileAssets('ethers5.0.js', 'utf8').then(content => {
-          setEthersJsContent(content);
-        });
-      }
-    }
-    console.log('finished load js');
-  };
-
-  const setNetworks = network => {
-    const rskEndpoint =
-      network === 'Mainnet' ? MAINNET.RSK_END_POINT : TESTNET.RSK_END_POINT;
-    const networkVersion =
-      network === 'Mainnet' ? MAINNET.NETWORK_VERSION : TESTNET.NETWORK_VERSION;
-
-    const web3 = new Web3(rskEndpoint);
-
-    setRskEndpoint(rskEndpoint);
-    setNetworkVersion(networkVersion);
-    setWeb3(web3);
-  };
-
   const getJsCode = address => {
-    const dappName = 'Money on Chain';
+    return `if(typeof EthereumProvider === "undefined"){
+var callbackId = 0;
+var callbacks = {};
 
-    return `
-      ${web3JsContent}
-      ${ethersJsContent}
-        (function() {
-          let resolver = {};
-          let rejecter = {};
-          ${
-            Platform.OS === 'ios' ? 'window' : 'document'
-          }.addEventListener("message", function(data) {
-            try {
-              const passData = data.data ? JSON.parse(data.data) : data.data;
-              const { id, result } = passData;
-              if (result && result.error && rejecter[id]) {
-                rejecter[id](new Error(result.message));
-              } else if (resolver[id]) {
-                resolver[id](result);
-              }
-            } catch(err) {
-              console.log('listener message err: ', err);
-            }
-          })
-          communicateWithRN = (payload) => {
-            return new Promise((resolve, reject) => {
-              console.log('JSON.stringify(payload): ', JSON.stringify(payload));
-              window.ReactNativeWebView.postMessage(JSON.stringify(payload));
-              const { id } = payload;
-              resolver[id] = resolve;
-              rejecter[id] = reject;
-            })
-          }
-          function initWeb3() {
-            // Inject the web3 instance to web site
-            const rskEndpoint = '${rskEndpoint}';
-            const provider = new Web3.providers.HttpProvider(rskEndpoint);
-            const web3Provider = new ethers.providers.Web3Provider(provider)
-            const web3 = new Web3(provider);
-            // When Dapp is "Money on Chain", webview uses Web3's Provider, others uses Ethers' Provider
-            window.ethereum = '${dappName}' === 'Money on Chain' ? provider : web3Provider;
-            window.ethereum.selectedAddress = '${address}';
-            window.address = '${address}';
-            window.ethereum.networkVersion = '${networkVersion}';
-            window.ethereum.isRWallet = true;
-            window.web3 = web3;
-            // Adapt web3 old version (new web3 version move toDecimal and toBigNumber to utils class).
-            window.web3.toDecimal = window.web3.utils.toDecimal;
-            window.web3.toBigNumber = window.web3.utils.toBN;
+bridgeSend = function (data) {
+    ReactNativeWebView.postMessage(JSON.stringify(data));
+}
 
-            const config = {
-              isEnabled: true,
-              isUnlocked: true,
-              networkVersion: '${networkVersion}',
-              onboardingcomplete: true,
-              selectedAddress: '${address}',
-            }
-            // Some web site using the config to check the window.ethereum is exist or not
-            window.ethereum.publicConfigStore = {
-              _state: {
-                ...config,
-              },
-              getState: () => {
-                return {
-                  ...config,
+function sendAPIrequest(permission, params) {
+    var messageId = callbackId++;
+    var params = params || {};
+
+    bridgeSend({
+        type: 'api-request',
+        permission: permission,
+        messageId: messageId,
+        params: params
+    });
+
+    return new Promise(function (resolve, reject) {
+        params['resolve'] = resolve;
+        params['reject'] = reject;
+        callbacks[messageId] = params;
+    });
+}
+
+function qrCodeResponse(data, callback){
+    var result = data.data;
+    var regex = new RegExp(callback.regex);
+    if (!result) {
+        if (callback.reject) {
+            callback.reject(new Error("Cancelled"));
+        }
+    }
+    else if (regex.test(result)) {
+        if (callback.resolve) {
+            callback.resolve(result);
+        }
+    } else {
+        if (callback.reject) {
+            callback.reject(new Error("Doesn't match"));
+        }
+    }
+}
+
+function Unauthorized() {
+  this.name = "Unauthorized";
+  this.id = 4100;
+  this.message = "The requested method and/or account has not been authorized by the user.";
+}
+Unauthorized.prototype = Object.create(Error.prototype);
+
+function UserRejectedRequest() {
+  this.name = "UserRejectedRequest";
+  this.id = 4001;
+  this.message = "The user rejected the request.";
+}
+UserRejectedRequest.prototype = Object.create(Error.prototype);
+
+ReactNativeWebView.onMessage = function (message)
+{
+    data = JSON.parse(message);
+    var id = data.messageId;
+    var callback = callbacks[id];
+
+    if (callback) {
+        if (data.type === "api-response") {
+            if (data.permission == 'qr-code'){
+                qrCodeResponse(data, callback);
+            } else if (data.isAllowed) {
+                if (data.permission == 'web3') {
+                    currentAccountAddress = data.data[0];
                 }
-              }
+                callback.resolve(data.data);
+            } else {
+                callback.reject(new UserRejectedRequest());
             }
-            window.web3.setProvider(window.ethereum);
-            // Override enable function can return the current address to web site
-            window.ethereum.enable = () => {
-              return new Promise((resolve, reject) => {
-                resolve(['${address}']);
-              })
+        }
+        else if (data.type === "web3-send-async-callback")
+        {
+            if (callback.beta)
+            {
+                if (data.error)
+                {
+                    if (data.error.code == 4100)
+                        callback.reject(new Unauthorized());
+                    else
+                        //TODO probably if rpc returns empty result we need to call resolve with empty data?
+                        callback.reject(data.error);
+                }
+                else{
+                // TODO : according to https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1193.md#examples
+                // TODO : we need to return data.result.result here, but for some reason some dapps (uniswap)
+                // TODO : expects jsonrpc
+                    callback.resolve(data.result);
+                }
             }
-            // Adapt web3 old version (new web3 version remove this function)
-            window.web3.version = {
-              api: '1.2.7',
-              getNetwork: (cb) => { cb(null, '${networkVersion}') },
+            else if (callback.results)
+            {
+                callback.results.push(data.error || data.result);
+                if (callback.results.length == callback.num)
+                    callback.callback(undefined, callback.results);
             }
-            window.ethereum.on = (method, callback) => { if (method) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({type: "click", message : "ok"}));
-            } }
-            // Override the sendAsync function so we can listen the web site's call and do our things
-            const sendAsync = async (payload, callback) => {
-              let err, res = '', result = '';
-              const {method, params, jsonrpc, id} = payload;
-              console.log('payload: ', payload);
-              await communicateWithRN(payload)
+            else
+            {
+                callback.callback(data.error, data.result);
             }
-            // ensure window.ethereum.send and window.ethereum.sendAsync are not undefined
-            setTimeout(() => {
-              if (!window.ethereum.send) {
-                window.ethereum.send = sendAsync;
-              }
-              if (!window.ethereum.sendAsync) {
-                window.ethereum.sendAsync = sendAsync;
-              }
-              if (!window.ethereum.request) {
-                window.ethereum.request = (payload) =>
-                  new Promise((resolve, reject) =>
-                    sendAsync(payload).then(response =>
-                      response.result
-                        ? resolve(response.result)
-                        : reject(new Error(response.message || 'provider error'))));
-              }
-            }, 1000)
+        }
+    }
+};
+
+function web3Response (payload, result){
+    return {id: payload.id,
+            jsonrpc: "2.0",
+            result: result};
+}
+
+function getSyncResponse (payload) {
+    if (payload.method == "eth_accounts" && (typeof currentAccountAddress !== "undefined")) {
+        return web3Response(payload, [currentAccountAddress])
+    } else if (payload.method == "eth_coinbase" && (typeof currentAccountAddress !== "undefined")) {
+        return web3Response(payload, currentAccountAddress)
+    } else if (payload.method == "net_version" || payload.method == "eth_chainId"){
+        return web3Response(payload, networkId)
+    } else if (payload.method == "eth_uninstallFilter"){
+        return web3Response(payload, true);
+    } else {
+        return null;
+    }
+}
+
+var StatusAPI = function () {};
+
+StatusAPI.prototype.getContactCode = function () {
+    return sendAPIrequest('contact-code');
+};
+
+var EthereumProvider = function () {};
+
+EthereumProvider.prototype.isStatus = true;
+EthereumProvider.prototype.status = new StatusAPI();
+EthereumProvider.prototype.isConnected = function () { return true; };
+
+EthereumProvider.prototype.enable = function () {
+    return sendAPIrequest('web3');
+};
+
+EthereumProvider.prototype.scanQRCode = function (regex) {
+    return sendAPIrequest('qr-code', {regex: regex});
+};
+
+//Support for legacy send method
+EthereumProvider.prototype.sendSync = function (payload)
+{
+    if (payload.method == "eth_uninstallFilter"){
+        this.sendAsync(payload, function (res, err) {})
+    }
+    var syncResponse = getSyncResponse(payload);
+    if (syncResponse){
+        return syncResponse;
+    } else {
+        return web3Response(payload, null);
+    }
+};
+
+EthereumProvider.prototype.send = function (method, params = [])
+{
+    if (!method) {
+      return new Error('Request is not valid.');
+    }
+
+    if (!(params instanceof Array)) {
+      return new Error('Params is not a valid array.');
+    }
+
+    //Support for legacy send method
+    if (typeof method !== 'string') {
+      return this.sendSync(method);
+    }
+
+    if (method == 'eth_requestAccounts'){
+        return sendAPIrequest('web3');
+    }
+
+    var syncResponse = getSyncResponse({method: method});
+    if (syncResponse){
+        return new Promise(function (resolve, reject) {
+                                   resolve(syncResponse);
+                               });
+    }
+
+    var messageId = callbackId++;
+    var payload = {id:      messageId,
+                   jsonrpc: "2.0",
+                   method:  method,
+                   params:  params};
+
+    bridgeSend({type:      'web3-send-async-read-only',
+                messageId: messageId,
+                payload:   payload});
+
+    return new Promise(function (resolve, reject) {
+                           callbacks[messageId] = {beta:    true,
+                                                   resolve: resolve,
+                                                   reject:  reject};
+                       });
+};
+
+//Support for legacy sendAsync method
+EthereumProvider.prototype.sendAsync = function (payload, callback)
+{
+  var syncResponse = getSyncResponse(payload);
+  if (syncResponse && callback) {
+      callback(null, syncResponse);
+  }
+  else
+  {
+      var messageId = callbackId++;
+
+      if (Array.isArray(payload))
+      {
+          callbacks[messageId] = {num:      payload.length,
+                                  results:  [],
+                                  callback: callback};
+          for (var i in payload) {
+              bridgeSend({type:      'web3-send-async-read-only',
+                          messageId: messageId,
+                          payload:   payload[i]});
           }
-          initWeb3();
-        }) ();
-      true
-    `;
+      }
+      else
+      {
+          callbacks[messageId] = {callback: callback};
+          bridgeSend({type:      'web3-send-async-read-only',
+                      messageId: messageId,
+                      payload:   payload});
+      }
+  }
+};
+}
+
+ethereum = new EthereumProvider();
+(function () {
+    var history = window.history;
+    var pushState = history.pushState;
+    history.pushState = function(state) {
+        setTimeout(function () {
+            bridgeSend({
+               type: 'history-state-changed',
+               navState: { url: location.href, title: document.title }
+            });
+        }, 100);
+        return pushState.apply(history, arguments);
+    };
+}());
+`;
   };
 
   const injectJavaScript = address => {
@@ -235,8 +312,23 @@ export default function App() {
   const onMessage = async event => {
     console.log('_onMessage', JSON.parse(event.nativeEvent.data));
     const res = JSON.parse(event.nativeEvent.data);
+    const {type} = res;
+
+    switch (type) {
+      case 'api-request': {
+        handleConnectWallet();
+        break;
+      }
+    }
+  };
+
+  const handleConnectWallet = () => {
     handleSnapPress(0);
     setPopupView(true);
+  };
+
+  const postMessageToWebView = result => {
+    this.webview.current.postMessage(result);
   };
 
   const popupMessageModal = () => {
@@ -299,12 +391,6 @@ export default function App() {
     const res = await web3.getBlockNumber();
     const result = {id, result: res};
     postMessageToWebView(result);
-  };
-
-  const postMessageToWebView = result => {
-    if (webview && webview.current) {
-      webview.current.postMessage(JSON.stringify(result));
-    }
   };
 
   const handleEthGetTransactionReceipt = async payload => {
