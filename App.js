@@ -1,6 +1,7 @@
-import React, {useState, useRef, createRef, useCallback, useMemo} from 'react';
+import React, {createRef, useCallback, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
+  Platform,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -14,9 +15,11 @@ import {Wallet} from 'ethers';
 import BottomSheet, {BottomSheetView} from '@gorhom/bottom-sheet';
 import CustomBackground from './CustomBackground';
 import web3 from 'web3';
+import * as RNFS from 'react-native-fs';
+import Icon from 'react-native-vector-icons/FontAwesome';
 
 export default function App() {
-  const [url, seturl] = useState('https://pancakeswap.finance/');
+  const [url, setUrl] = useState('https://pancakeswap.finance/');
   const [canGoForward, setCanGoForward] = useState(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [loader, setLoader] = useState(false);
@@ -25,8 +28,11 @@ export default function App() {
   const inputRef = useRef(null);
   const [popupView, setPopupView] = React.useState(false);
   const [address, setAddress] = React.useState('');
+  const [providerJs, setProviderJs] = React.useState('');
+  const [webviewJs, setWebviewJs] = React.useState('');
 
   React.useEffect(() => {
+    loadJsFiles();
     generateWallet();
   }, []);
 
@@ -39,274 +45,47 @@ export default function App() {
     sheetRef.current?.snapToIndex(index);
   }, []);
 
+  const loadJsFiles = () => {
+    if (providerJs === '') {
+      if (Platform.OS === 'ios') {
+        RNFS.readFile(`${RNFS.MainBundlePath}/provider.js`, 'utf8').then(
+          content => {
+            setProviderJs(content);
+          },
+        );
+      } else {
+        RNFS.readFileAssets('provider.js', 'utf8').then(content => {
+          setProviderJs(content);
+        });
+      }
+    }
+
+    if (webviewJs === '') {
+      if (Platform.OS === 'ios') {
+        RNFS.readFile(`${RNFS.MainBundlePath}/webview.js`, 'utf8').then(
+          content => {
+            setWebviewJs(content);
+          },
+        );
+      } else {
+        RNFS.readFileAssets('webview.js', 'utf8').then(content => {
+          setWebviewJs(content);
+        });
+      }
+    }
+    console.log('finished load js');
+  };
+
   const generateWallet = () => {
     const wallet = Wallet.createRandom();
-    console.log(wallet.address);
     setAddress(wallet.address);
+    console.log(wallet.address);
   };
 
-  const getJsCode = address => {
-    return `if(typeof EthereumProvider === "undefined"){
-var callbackId = 0;
-var callbacks = {};
-
-bridgeSend = function (data) {
-    ReactNativeWebView.postMessage(JSON.stringify(data));
-}
-
-function sendAPIrequest(permission, params) {
-    var messageId = callbackId++;
-    var params = params || {};
-
-    bridgeSend({
-        type: 'api-request',
-        permission: permission,
-        messageId: messageId,
-        params: params
-    });
-
-    return new Promise(function (resolve, reject) {
-        params['resolve'] = resolve;
-        params['reject'] = reject;
-        callbacks[messageId] = params;
-    });
-}
-
-function qrCodeResponse(data, callback){
-    var result = data.data;
-    var regex = new RegExp(callback.regex);
-    if (!result) {
-        if (callback.reject) {
-            callback.reject(new Error("Cancelled"));
-        }
-    }
-    else if (regex.test(result)) {
-        if (callback.resolve) {
-            callback.resolve(result);
-        }
-    } else {
-        if (callback.reject) {
-            callback.reject(new Error("Doesn't match"));
-        }
-    }
-}
-
-function Unauthorized() {
-  this.name = "Unauthorized";
-  this.id = 4100;
-  this.message = "The requested method and/or account has not been authorized by the user.";
-}
-Unauthorized.prototype = Object.create(Error.prototype);
-
-function UserRejectedRequest() {
-  this.name = "UserRejectedRequest";
-  this.id = 4001;
-  this.message = "The user rejected the request.";
-}
-UserRejectedRequest.prototype = Object.create(Error.prototype);
-
-ReactNativeWebView.onMessage = function (message)
-{
-    data = JSON.parse(message);
-    var id = data.messageId;
-    var callback = callbacks[id];
-
-    if (callback) {
-        if (data.type === "api-response") {
-            if (data.permission == 'qr-code'){
-                qrCodeResponse(data, callback);
-            } else if (data.isAllowed) {
-                if (data.permission == 'web3') {
-                    currentAccountAddress = data.data[0];
-                }
-                callback.resolve(data.data);
-            } else {
-                callback.reject(new UserRejectedRequest());
-            }
-        }
-        else if (data.type === "web3-send-async-callback")
-        {
-            if (callback.beta)
-            {
-                if (data.error)
-                {
-                    if (data.error.code == 4100)
-                        callback.reject(new Unauthorized());
-                    else
-                        //TODO probably if rpc returns empty result we need to call resolve with empty data?
-                        callback.reject(data.error);
-                }
-                else{
-                // TODO : according to https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1193.md#examples
-                // TODO : we need to return data.result.result here, but for some reason some dapps (uniswap)
-                // TODO : expects jsonrpc
-                    callback.resolve(data.result);
-                }
-            }
-            else if (callback.results)
-            {
-                callback.results.push(data.error || data.result);
-                if (callback.results.length == callback.num)
-                    callback.callback(undefined, callback.results);
-            }
-            else
-            {
-                callback.callback(data.error, data.result);
-            }
-        }
-    }
-};
-
-function web3Response (payload, result){
-    return {id: payload.id,
-            jsonrpc: "2.0",
-            result: result};
-}
-
-function getSyncResponse (payload) {
-    if (payload.method == "eth_accounts" && (typeof currentAccountAddress !== "undefined")) {
-        return web3Response(payload, [currentAccountAddress])
-    } else if (payload.method == "eth_coinbase" && (typeof currentAccountAddress !== "undefined")) {
-        return web3Response(payload, currentAccountAddress)
-    } else if (payload.method == "net_version" || payload.method == "eth_chainId"){
-        return web3Response(payload, networkId)
-    } else if (payload.method == "eth_uninstallFilter"){
-        return web3Response(payload, true);
-    } else {
-        return null;
-    }
-}
-
-var StatusAPI = function () {};
-
-StatusAPI.prototype.getContactCode = function () {
-    return sendAPIrequest('contact-code');
-};
-
-var EthereumProvider = function () {};
-
-EthereumProvider.prototype.isStatus = true;
-EthereumProvider.prototype.status = new StatusAPI();
-EthereumProvider.prototype.isConnected = function () { return true; };
-
-EthereumProvider.prototype.enable = function () {
-    return sendAPIrequest('web3');
-};
-
-EthereumProvider.prototype.scanQRCode = function (regex) {
-    return sendAPIrequest('qr-code', {regex: regex});
-};
-
-//Support for legacy send method
-EthereumProvider.prototype.sendSync = function (payload)
-{
-    if (payload.method == "eth_uninstallFilter"){
-        this.sendAsync(payload, function (res, err) {})
-    }
-    var syncResponse = getSyncResponse(payload);
-    if (syncResponse){
-        return syncResponse;
-    } else {
-        return web3Response(payload, null);
-    }
-};
-
-EthereumProvider.prototype.send = function (method, params = [])
-{
-    if (!method) {
-      return new Error('Request is not valid.');
-    }
-
-    if (!(params instanceof Array)) {
-      return new Error('Params is not a valid array.');
-    }
-
-    //Support for legacy send method
-    if (typeof method !== 'string') {
-      return this.sendSync(method);
-    }
-
-    if (method == 'eth_requestAccounts'){
-        return sendAPIrequest('web3');
-    }
-
-    var syncResponse = getSyncResponse({method: method});
-    if (syncResponse){
-        return new Promise(function (resolve, reject) {
-                                   resolve(syncResponse);
-                               });
-    }
-
-    var messageId = callbackId++;
-    var payload = {id:      messageId,
-                   jsonrpc: "2.0",
-                   method:  method,
-                   params:  params};
-
-    bridgeSend({type:      'web3-send-async-read-only',
-                messageId: messageId,
-                payload:   payload});
-
-    return new Promise(function (resolve, reject) {
-                           callbacks[messageId] = {beta:    true,
-                                                   resolve: resolve,
-                                                   reject:  reject};
-                       });
-};
-
-//Support for legacy sendAsync method
-EthereumProvider.prototype.sendAsync = function (payload, callback)
-{
-  var syncResponse = getSyncResponse(payload);
-  if (syncResponse && callback) {
-      callback(null, syncResponse);
-  }
-  else
-  {
-      var messageId = callbackId++;
-
-      if (Array.isArray(payload))
-      {
-          callbacks[messageId] = {num:      payload.length,
-                                  results:  [],
-                                  callback: callback};
-          for (var i in payload) {
-              bridgeSend({type:      'web3-send-async-read-only',
-                          messageId: messageId,
-                          payload:   payload[i]});
-          }
-      }
-      else
-      {
-          callbacks[messageId] = {callback: callback};
-          bridgeSend({type:      'web3-send-async-read-only',
-                      messageId: messageId,
-                      payload:   payload});
-      }
-  }
-};
-}
-
-ethereum = new EthereumProvider();
-(function () {
-    var history = window.history;
-    var pushState = history.pushState;
-    history.pushState = function(state) {
-        setTimeout(function () {
-            bridgeSend({
-               type: 'history-state-changed',
-               navState: { url: location.href, title: document.title }
-            });
-        }, 100);
-        return pushState.apply(history, arguments);
-    };
-}());
-`;
-  };
-
-  const injectJavaScript = address => {
-    const jsCode = getJsCode(address);
-    return jsCode;
+  const injectJavaScript = () => {
+    return `${providerJs}${webviewJs}
+    console.log(window)
+    `;
   };
 
   const onMessage = async event => {
@@ -429,22 +208,22 @@ ethereum = new EthereumProvider();
     const isURL = uri.split(' ').length === 1 && uri.includes('.');
     if (isURL) {
       if (!uri.startsWith('http')) {
-        seturl('https://www.' + uri);
+        setUrl('https://www.' + uri);
         return 'https://www.' + uri;
       }
-      seturl(uri);
+      setUrl(uri);
       return uri;
     }
     // search for the text in the search engine
 
     const encodedURI = encodeURI(uri);
-    seturl(searchEngines[searchEngine](encodedURI));
+    setUrl(searchEngines[searchEngine](encodedURI));
     return searchEngines[searchEngine](encodedURI);
   }
 
   const onNavigationStateChange = navState => {
     const {canGoForward, canGoBack, title, url} = navState;
-    seturl(url);
+    setUrl(url);
     setTitle(title);
     setCanGoBack(canGoBack);
     setCanGoForward(canGoForward);
@@ -468,29 +247,45 @@ ethereum = new EthereumProvider();
     <View style={styles.container}>
       <SafeAreaView style={{flex: 1}}>
         <View
-          style={{flexDirection: 'row', alignItems: 'center', marginTop: 10}}>
-          <TouchableOpacity activeOpacity={0.7} onPress={goBack}>
-            <Text>icon</Text>
-            <Text> {'<'} </Text>
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginTop: 10,
+          }}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={goBack}
+            style={{marginRight: 10}}>
+            <Icon
+              name="chevron-left"
+              size={20}
+              color={canGoBack ? '#000' : '#808080'}
+            />
           </TouchableOpacity>
+
           <TouchableOpacity
             disabled={!canGoForward}
             activeOpacity={0.7}
             onPress={goForward}>
-            <Text>icon</Text>
-            <Text> {'>'} </Text>
+            <Icon
+              name="chevron-right"
+              size={20}
+              color={canGoForward ? '#000' : '#808080'}
+            />
           </TouchableOpacity>
+
           <TextInput
             ref={inputRef}
             autoCapitalize="none"
             defaultValue={url}
             onSubmitEditing={() => upgradeURL(url)}
             returnKeyType="search"
-            onChangeText={val => seturl(val)}
+            onChangeText={val => setUrl(val)}
             clearButtonMode="while-editing"
             autoCorrect={false}
             style={[styles.addressBarTextInput]}
           />
+
           {loader ? (
             <View style={{paddingHorizontal: 20}} activeOpacity={0.7}>
               <ActivityIndicator size="small" color="#000" />
@@ -498,16 +293,22 @@ ethereum = new EthereumProvider();
           ) : null}
         </View>
 
-        <WebView
-          ref={webview}
-          source={{uri: url}}
-          onNavigationStateChange={onNavigationStateChange}
-          onLoadStart={() => setLoader(true)}
-          onLoadEnd={() => setLoader(false)}
-          injectedJavaScriptBeforeContentLoaded={injectJavaScript(address)}
-          javaScriptEnabled
-          onMessage={onMessage}
-        />
+        {webviewJs !== '' && providerJs !== '' ? (
+          <WebView
+            ref={webview}
+            source={{uri: url}}
+            onNavigationStateChange={onNavigationStateChange}
+            onLoadStart={() => setLoader(true)}
+            onLoadEnd={() => setLoader(false)}
+            injectedJavaScriptBeforeContentLoaded={injectJavaScript(address)}
+            javaScriptEnabled
+            onMessage={onMessage}
+          />
+        ) : (
+          <View style={{paddingHorizontal: 20}} activeOpacity={0.7}>
+            <ActivityIndicator size="small" color="#000" />
+          </View>
+        )}
 
         {popupView && popupMessageModal()}
       </SafeAreaView>
