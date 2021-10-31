@@ -17,6 +17,7 @@ import CustomBackground from './CustomBackground';
 import web3 from 'web3';
 import * as RNFS from 'react-native-fs';
 import Icon from 'react-native-vector-icons/FontAwesome';
+import {Picker} from '@react-native-picker/picker';
 
 export default function App() {
   const [url, setUrl] = useState('https://pancakeswap.finance/');
@@ -27,13 +28,14 @@ export default function App() {
   const webview = createRef();
   const inputRef = useRef(null);
   const [popupView, setPopupView] = React.useState(false);
-  const [address, setAddress] = React.useState('');
   const [providerJs, setProviderJs] = React.useState('');
   const [webviewJs, setWebviewJs] = React.useState('');
+  const [loadingWallet, setLoadingWallet] = React.useState(false);
+  const [wallets, setWallets] = React.useState([]);
+  const [selectedAddress, setSelectedAddress] = React.useState('');
 
   React.useEffect(() => {
     loadJsFiles();
-    generateWallet();
   }, []);
 
   // hooks
@@ -76,12 +78,6 @@ export default function App() {
     console.log('finished load js');
   };
 
-  const generateWallet = () => {
-    const wallet = Wallet.createRandom();
-    setAddress(wallet.address);
-    console.log(wallet.address);
-  };
-
   const injectJavaScript = () => {
     return `${providerJs}${webviewJs}
     console.log(window)
@@ -121,11 +117,55 @@ export default function App() {
         <BottomSheetView
           style={{
             flex: 1,
+            alignItems: 'center',
           }}>
-          <Text style={{alignSelf: 'center'}}>Hello Metamask</Text>
+          <Text>Hello Metamask</Text>
+          {wallets.length === 0 ? (
+            <Text style={{margin: 10}}>
+              No wallets, you have to create a new one
+            </Text>
+          ) : (
+            <Picker
+              style={{width: '90%'}}
+              selectedValue={selectedAddress}
+              onValueChange={(itemValue, itemIndex) =>
+                setSelectedAddress(itemValue)
+              }>
+              {wallets.map(wallet => {
+                return <Picker.Item label={wallet} value={wallet} />;
+              })}
+            </Picker>
+          )}
+
+          {loadingWallet ? (
+            <View style={{paddingHorizontal: 20}} activeOpacity={0.7}>
+              <ActivityIndicator size="small" color="#000" />
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={{borderWidth: 1, borderRadius: 10, padding: 5}}
+              onPress={() => handleCreateWallet()}
+              disabled={loadingWallet}>
+              <Text>Create new wallet</Text>
+            </TouchableOpacity>
+          )}
         </BottomSheetView>
       </BottomSheet>
     );
+  };
+
+  const handleCreateWallet = () => {
+    setLoadingWallet(true);
+
+    console.log('Creating new wallet...');
+    setTimeout(() => {
+      const wallet = Wallet.createRandom();
+      setWallets(oldArray => [...oldArray, wallet.address]);
+
+      console.log(wallets, 'wallets');
+      console.log('Wallet addres: ', wallet.address);
+      setLoadingWallet(false);
+    }, 500);
   };
 
   const handleWalletAddEthereumChain = () => {};
@@ -300,7 +340,7 @@ export default function App() {
             onNavigationStateChange={onNavigationStateChange}
             onLoadStart={() => setLoader(true)}
             onLoadEnd={() => setLoader(false)}
-            injectedJavaScriptBeforeContentLoaded={injectJavaScript(address)}
+            injectedJavaScriptBeforeContentLoaded={injectJavaScript()}
             javaScriptEnabled
             onMessage={onMessage}
           />
