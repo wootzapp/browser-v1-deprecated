@@ -3,6 +3,15 @@ if (typeof EthereumProvider === 'undefined') {
   var callbacks = {};
 
   bridgeSend = function (data) {
+    console.log('BridgeSend call...');
+
+    // var data2 = {
+    //   type: 'api-response',
+    //   permission: 'web3',
+    //   messageId: 0,
+    //   params: {},
+    //   data: ['0x2f67aee4bb75d53e606736d177dbcd4df0311861'],
+    // };
     ReactNativeWebView.postMessage(JSON.stringify(data));
   };
 
@@ -146,6 +155,34 @@ if (typeof EthereumProvider === 'undefined') {
   EthereumProvider.prototype.enable = function () {
     return sendAPIrequest('web3');
   };
+  EthereumProvider.prototype.request = function (payload) {
+    this.eth_accounts = function () {
+      return ['0x2F67AeE4bB75d53E606736D177dbCd4dF0311861'];
+    };
+    this.eth_requestAccounts = function () {
+      return sendAPIrequest('web3', [
+        '0x2F67AeE4bB75d53E606736D177dbCd4dF0311861',
+      ]);
+    };
+
+    return new Promise((resolve, reject) => {
+      switch (payload.method) {
+        case 'eth_accounts':
+          return this.eth_accounts();
+        case 'eth_requestAccounts':
+          return this.eth_requestAccounts();
+        // case "eth_signTypedData":
+        // case "eth_signTypedData_v3":
+        //   return this.eth_signTypedData(payload);
+        // case "eth_sendTransaction":
+        //   return this.eth_sendTransaction(payload);
+        // case "eth_requestAccounts":
+        //   return this.eth_requestAccounts(payload);
+        default:
+          console.log('method not defined');
+      }
+    });
+  };
 
   EthereumProvider.prototype.scanQRCode = function (regex) {
     return sendAPIrequest('qr-code', {regex: regex});
@@ -165,6 +202,8 @@ if (typeof EthereumProvider === 'undefined') {
   };
 
   EthereumProvider.prototype.send = function (method, params = []) {
+    console.log('method send: ', method);
+
     if (!method) {
       return new Error('Request is not valid.');
     }
@@ -179,7 +218,9 @@ if (typeof EthereumProvider === 'undefined') {
     }
 
     if (method == 'eth_requestAccounts') {
-      return sendAPIrequest('web3');
+      return sendAPIrequest('web3', [
+        '0x35395900Ab1335532D17D8BA362ebe45BAcbC6f8',
+      ]);
     }
 
     var syncResponse = getSyncResponse({method: method});
