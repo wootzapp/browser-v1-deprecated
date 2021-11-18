@@ -156,6 +156,7 @@ if (typeof EthereumProvider === 'undefined') {
     return sendAPIrequest('web3');
   };
   EthereumProvider.prototype.request = function (payload) {
+    console.log('Payload from .request: ', payload);
     this.eth_accounts = function () {
       return ['0x2F67AeE4bB75d53E606736D177dbCd4dF0311861'];
     };
@@ -199,54 +200,6 @@ if (typeof EthereumProvider === 'undefined') {
     } else {
       return web3Response(payload, null);
     }
-  };
-
-  EthereumProvider.prototype.send = function (method, params = []) {
-    console.log('method send: ', method);
-
-    if (!method) {
-      return new Error('Request is not valid.');
-    }
-
-    if (!(params instanceof Array)) {
-      return new Error('Params is not a valid array.');
-    }
-
-    //Support for legacy send method
-    if (typeof method !== 'string') {
-      return this.sendSync(method);
-    }
-
-    if (method == 'eth_requestAccounts') {
-      return sendAPIrequest('web3', [
-        '0x35395900Ab1335532D17D8BA362ebe45BAcbC6f8',
-      ]);
-    }
-
-    var syncResponse = getSyncResponse({method: method});
-    if (syncResponse) {
-      return new Promise(function (resolve, reject) {
-        resolve(syncResponse);
-      });
-    }
-
-    var messageId = callbackId++;
-    var payload = {
-      id: messageId,
-      jsonrpc: '2.0',
-      method: method,
-      params: params,
-    };
-
-    bridgeSend({
-      type: 'web3-send-async-read-only',
-      messageId: messageId,
-      payload: payload,
-    });
-
-    return new Promise(function (resolve, reject) {
-      callbacks[messageId] = {beta: true, resolve: resolve, reject: reject};
-    });
   };
 
   //Support for legacy sendAsync method

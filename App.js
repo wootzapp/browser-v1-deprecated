@@ -80,30 +80,73 @@ export default function App() {
 
   const injectJavaScript = () => {
     return `${providerJs}${webviewJs}
-    console.log(window)
+    console.log(window);
+
+    const communicateWithRN = (payload) => {
+      return new Promise((resolve, reject) => {
+        console.log('JSON.stringify(payload): ', JSON.stringify(payload));
+        window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+      })
+    }
+
+      EthereumProvider.prototype.send = function (method, params = []) {
+    console.log('method send: ', method);
+    if (!method) {
+      return new Error('Request is not valid.');
+    }
+
+    if (!(params instanceof Array)) {
+      return new Error('Params is not a valid array.');
+    }
+
+    //Support for legacy send method
+    if (typeof method !== 'string') {
+      return this.sendSync(method);
+    }
+    
+    var messageId = callbackId++;
+    var payload = {
+      id: messageId,
+      jsonrpc: '2.0',
+      method: method,
+      params: params,
+    };
+    
+    return communicateWithRN(payload)
+  };
     `;
   };
 
   const onMessage = async event => {
-    console.log('_onMessage', JSON.parse(event.nativeEvent.data));
+    console.log('_onMessage JSON PARSE', JSON.parse(event.nativeEvent.data));
     const res = JSON.parse(event.nativeEvent.data);
-    const {type} = res;
 
-    switch (type) {
-      case 'api-request': {
-        handleConnectWallet();
+    switch (res.method) {
+      case 'eth_requestAccounts': {
+        handleConnectWallet(res.id);
         break;
       }
     }
   };
 
-  const handleConnectWallet = () => {
+  const handleConnectWallet = id => {
     handleSnapPress(0);
     setPopupView(true);
+
+    const result = {
+      id: id,
+      jsonrpc: '2.0',
+      result: ['0x2F67AeE4bB75d53E606736D177dbCd4dF0311861'],
+    };
+    return postMessageToWebView(result);
   };
 
   const postMessageToWebView = result => {
-    this.webview.current.postMessage(result);
+    if (webview && webview.current) {
+      webview.current.postMessage(JSON.stringify(result));
+    } else {
+      console.log('no webview or webview.current');
+    }
   };
 
   const popupMessageModal = () => {
