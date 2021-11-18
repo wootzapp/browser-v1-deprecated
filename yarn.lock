@@ -9486,8 +9486,9 @@
   dependencies:
     "bn.js" "^4.11.1"
 
-"rn-nodeify@github:tradle/rn-nodeify":
-  "resolved" "git+ssh://git@github.com/tradle/rn-nodeify.git#338d8d6ba8438403093e9409e9a9d88ad884926f"
+"rn-nodeify@^10.3.0":
+  "integrity" "sha512-EZB3M4M5i8yySCWF7AAZ31xU7cpdLuIKMlVxXji9t0aY8Ojy3BAyRt1sTp0OwBgy1ejShmlIu2L4f8mToJ+uvg=="
+  "resolved" "https://registry.npmjs.org/rn-nodeify/-/rn-nodeify-10.3.0.tgz"
   "version" "10.3.0"
   dependencies:
     "@yarnpkg/lockfile" "^1.0.0"
