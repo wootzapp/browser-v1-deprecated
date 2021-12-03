@@ -10,11 +10,10 @@ import {
   View,
 } from 'react-native';
 import {WebView} from 'react-native-webview';
-import _ from 'lodash';
+import '@ethersproject/shims';
 import {Wallet} from 'ethers';
 import BottomSheet, {BottomSheetView} from '@gorhom/bottom-sheet';
 import CustomBackground from './CustomBackground';
-import web3 from 'web3';
 import * as RNFS from 'react-native-fs';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import {Picker} from '@react-native-picker/picker';
@@ -169,68 +168,6 @@ export default function App() {
   };
 
   const handleWalletAddEthereumChain = () => {};
-
-  const handleEthEstimateGas = async payload => {
-    const {params, id} = payload;
-    const res = await web3.estimateGas(params[0]);
-    const estimateGas = Number(res);
-    const result = {id, result: estimateGas};
-    postMessageToWebView(result);
-  };
-
-  const handleEthGasPrice = async payload => {
-    const {id} = payload;
-    const res = await web3.getGasPrice();
-    const result = {id, result: res};
-    postMessageToWebView(result);
-  };
-
-  const handleEthCall = async payload => {
-    const {id, params} = payload;
-    const res = await web3.call(params[0], params[1]);
-    const result = {id, result: res};
-    postMessageToWebView(result);
-  };
-
-  const handleEthGetBlockByNumber = async payload => {
-    const {id, params} = payload;
-    let res = 0;
-    // Get latest block info when passed block number is 0.
-    const blockNumber =
-      _.isEmpty(params) || (params[0] && params[0] === '0x0')
-        ? 'latest'
-        : params[0];
-    res = await web3.getBlock(blockNumber);
-    const result = {id, result: res};
-    postMessageToWebView(result);
-  };
-
-  const handleEthGetBlockNumber = async payload => {
-    const {id} = payload;
-    const res = await web3.getBlockNumber();
-    const result = {id, result: res};
-    postMessageToWebView(result);
-  };
-
-  const handleEthGetTransactionReceipt = async payload => {
-    const {id, params} = payload;
-    let res = await web3.getTransactionReceipt(params[0]);
-    if (!res) {
-      res = '';
-    } else {
-      // RNS and tRif faucet's transaction status judge condition: parseInt(status, 16) === 1, so need set true to 1 and false to 0
-      res.status = res.status ? 1 : 0;
-    }
-    const result = {id, result: res};
-    postMessageToWebView(result);
-  };
-
-  const handleEthGetTransactionByHash = async payload => {
-    const {id, params} = payload;
-    const res = await web3.getTransaction(params[0]);
-    const result = {id, result: res};
-    postMessageToWebView(result);
-  };
 
   // functions to search using different engines
   const searchEngines = {
